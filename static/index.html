@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment Recovery Decision Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="min-h-full flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-200">
+  
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg text-white tracking-tight flex items-center gap-2">
+            Payment Recovery Decision Engine
+            <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">v1.0</span>
+          </h1>
+          <p class="text-xs text-slate-400">Intelligent failure classification & idempotent recovery workflows</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-4">
+        <div id="status-pill" class="flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="status-text">Engine Online</span>
+        </div>
+        <a href="/docs" target="_blank" class="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700">
+          <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+          API Docs
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+    
+    <!-- Top Metric Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      
+      <!-- Recovered Revenue -->
+      <div class="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-5 shadow-xl relative overflow-hidden group hover:border-emerald-500/40 transition-all">
+        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-semibold uppercase tracking-wider">Recovered Revenue</span>
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+            <i data-lucide="dollar-sign" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="text-3xl font-extrabold text-emerald-400 tracking-tight" id="metric-revenue">$0.00</div>
+        <div class="mt-2 text-xs text-slate-400 flex items-center gap-1">
+          <span class="text-emerald-400 font-medium" id="metric-recovered-count">0</span> recovered payments
+        </div>
+      </div>
+
+      <!-- Recovery Rate -->
+      <div class="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-5 shadow-xl relative overflow-hidden group hover:border-indigo-500/40 transition-all">
+        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-semibold uppercase tracking-wider">Recovery Rate</span>
+          <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+            <i data-lucide="trending-up" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="text-3xl font-extrabold text-white tracking-tight" id="metric-rate">0.0%</div>
+        <div class="mt-2 text-xs text-slate-400">
+          Of recoverable transactions
+        </div>
+      </div>
+
+      <!-- Total Processed -->
+      <div class="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-5 shadow-xl relative overflow-hidden group hover:border-violet-500/40 transition-all">
+        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-violet-500/10 rounded-full blur-2xl group-hover:bg-violet-500/20 transition-all"></div>
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-semibold uppercase tracking-wider">Processed Runs</span>
+          <div class="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400">
+            <i data-lucide="layers" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="text-3xl font-extrabold text-white tracking-tight" id="metric-processed">0</div>
+        <div class="mt-2 text-xs text-slate-400 flex items-center gap-1">
+          Confidence avg: <span class="text-violet-400 font-medium" id="metric-confidence">0%</span>
+        </div>
+      </div>
+
+      <!-- Wasted Retries -->
+      <div class="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-5 shadow-xl relative overflow-hidden group hover:border-cyan-500/40 transition-all">
+        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-all"></div>
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-semibold uppercase tracking-wider">Wasted Retries</span>
+          <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+            <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="text-3xl font-extrabold text-cyan-300 tracking-tight" id="metric-wasted">0</div>
+        <div class="mt-2 text-xs text-slate-400">
+          False retry rate: <span class="text-cyan-400 font-medium" id="metric-false-retry-rate">0.0%</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Interactive Control Panel & Actions Breakdown -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Control Panel -->
+      <div class="lg:col-span-2 rounded-2xl bg-slate-900/60 border border-slate-800/80 p-6 shadow-xl">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div class="flex items-center space-x-2.5">
+            <div class="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+              <i data-lucide="play" class="w-4 h-4"></i>
+            </div>
+            <h2 class="text-base font-semibold text-white">Execute Decision Engine</h2>
+          </div>
+          <button onclick="refreshData()" class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 transition">
+            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+            Refresh
+          </button>
+        </div>
+
+        <form id="run-form" onsubmit="handleRunAgent(event)" class="mt-5 space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">Recovery Mode</label>
+              <select id="run-mode" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                <option value="rules" selected>Rules Engine (Deterministic)</option>
+                <option value="retry_all">Retry All (Baseline)</option>
+                <option value="llm">LLM Provider (Gemini / Groq)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">Batch Limit</label>
+              <select id="run-limit" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                <option value="100">100 transactions</option>
+                <option value="250">250 transactions</option>
+                <option value="500" selected>500 transactions</option>
+                <option value="1000">1,000 transactions</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2">
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" id="run-reset" checked class="w-4 h-4 rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-indigo-500" />
+              <span>Reset previous runs (clean evaluation)</span>
+            </label>
+            <button type="submit" id="btn-run" class="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50">
+              <i data-lucide="zap" class="w-4 h-4"></i>
+              <span>Run Engine</span>
+            </button>
+          </div>
+        </form>
+
+        <div id="run-banner" class="hidden mt-4 p-3 rounded-xl bg-indigo-950/50 border border-indigo-500/30 text-xs text-indigo-200 flex items-center justify-between">
+          <span id="run-banner-text">Processing...</span>
+          <span id="run-banner-time" class="text-slate-400 font-mono"></span>
+        </div>
+      </div>
+
+      <!-- Action Distribution Chart -->
+      <div class="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-6 shadow-xl flex flex-col justify-between">
+        <div class="flex items-center space-x-2.5 pb-4 border-b border-slate-800">
+          <div class="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400">
+            <i data-lucide="pie-chart" class="w-4 h-4"></i>
+          </div>
+          <h2 class="text-base font-semibold text-white">Workflows Applied</h2>
+        </div>
+        <div class="h-48 relative my-2 flex items-center justify-center">
+          <canvas id="actionsChart"></canvas>
+        </div>
+        <div class="text-xs text-center text-slate-500">Distribution of recent recovery workflows</div>
+      </div>
+
+    </div>
+
+    <!-- Recent Recovery Execution Table -->
+    <div class="rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-xl overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-semibold text-white">Recent Recovery Executions</h2>
+          <p class="text-xs text-slate-400">Real-time decisions and gateway idempotency logs</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="text-xs text-slate-400">Showing last:</span>
+          <select id="table-limit" onchange="fetchRuns()" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-950/80 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider">
+            <tr>
+              <th class="py-3 px-4">Tx ID</th>
+              <th class="py-3 px-4">Cause</th>
+              <th class="py-3 px-4">Decision / Workflow</th>
+              <th class="py-3 px-4">Gateway Status</th>
+              <th class="py-3 px-4">Recovered ($)</th>
+              <th class="py-3 px-4">Wasted Retry</th>
+              <th class="py-3 px-4">Timestamp</th>
+            </tr>
+          </thead>
+          <tbody id="runs-table-body" class="divide-y divide-slate-800/60 text-slate-300">
+            <tr>
+              <td colspan="7" class="py-8 text-center text-slate-500">Loading recent runs...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="border-t border-slate-800/80 bg-slate-950/60 py-4 text-center text-xs text-slate-500">
+    Payment Recovery Decision Engine • Built with FastAPI & PostgreSQL
+  </footer>
+
+  <script>
+    let actionsChartInstance = null;
+
+    async function fetchMetrics() {
+      try {
+        const res = await fetch('/metrics');
+        if (!res.ok) throw new Error('Metrics API error');
+        const data = await res.json();
+
+        document.getElementById('metric-revenue').textContent = `$${parseFloat(data.recovered_amount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('metric-recovered-count').textContent = data.recovered || 0;
+        document.getElementById('metric-rate').textContent = `${((data.recovery_rate || 0) * 100).toFixed(1)}%`;
+        document.getElementById('metric-processed').textContent = (data.processed || 0).toLocaleString();
+        document.getElementById('metric-confidence').textContent = `${((data.average_confidence || 0) * 100).toFixed(1)}%`;
+        document.getElementById('metric-wasted').textContent = data.wasted_retries || 0;
+        document.getElementById('metric-false-retry-rate').textContent = `${((data.false_retry_rate || 0) * 100).toFixed(1)}%`;
+
+        document.getElementById('status-pill').className = "flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs";
+        document.getElementById('status-text').textContent = "Engine Online";
+      } catch (err) {
+        document.getElementById('status-pill').className = "flex items-center space-x-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs";
+        document.getElementById('status-text').textContent = "Disconnected";
+      }
+    }
+
+    async function fetchRuns() {
+      const limit = document.getElementById('table-limit').value || 25;
+      try {
+        const res = await fetch(`/runs?limit=${limit}`);
+        if (!res.ok) throw new Error('Runs API error');
+        const runs = await res.json();
+
+        const tbody = document.getElementById('runs-table-body');
+        if (!runs.length) {
+          tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-500">No recovery runs recorded yet. Click "Run Engine" above to start!</td></tr>`;
+          updateChart({});
+          return;
+        }
+
+        const actionCounts = {};
+
+        tbody.innerHTML = runs.map(run => {
+          actionCounts[run.action] = (actionCounts[run.action] || 0) + 1;
+          
+          let actionBadge = '';
+          if (run.action === 'schedule_retry') {
+            actionBadge = '<span class="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 font-mono text-[11px]">schedule_retry</span>';
+          } else if (run.action === 'retry_now') {
+            actionBadge = '<span class="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-mono text-[11px]">retry_now</span>';
+          } else if (run.action === 'notify_customer') {
+            actionBadge = '<span class="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 font-mono text-[11px]">notify_customer</span>';
+          } else if (run.action === 'mark_lost') {
+            actionBadge = '<span class="px-2 py-0.5 rounded-full bg-slate-700/60 border border-slate-600 text-slate-400 font-mono text-[11px]">mark_lost</span>';
+          } else {
+            actionBadge = `<span class="px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 font-mono text-[11px]">${run.action}</span>`;
+          }
+
+          let statusBadge = '';
+          if (run.gateway_status === 'succeeded') {
+            statusBadge = '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">✓ Succeeded</span>';
+          } else if (run.gateway_status === 'skipped') {
+            statusBadge = '<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400">Skipped</span>';
+          } else {
+            statusBadge = '<span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400">Failed</span>';
+          }
+
+          const wastedBadge = run.wasted_retry 
+            ? '<span class="text-rose-400 font-medium">⚠️ Yes</span>' 
+            : '<span class="text-slate-500">No</span>';
+
+          const date = new Date(run.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+          return `
+            <tr class="hover:bg-slate-800/30 transition-colors">
+              <td class="py-3 px-4 font-mono text-slate-400">#${run.transaction_id}</td>
+              <td class="py-3 px-4 font-medium text-slate-200">${run.cause}</td>
+              <td class="py-3 px-4">${actionBadge}</td>
+              <td class="py-3 px-4">${statusBadge}</td>
+              <td class="py-3 px-4 font-mono ${parseFloat(run.recovered_amount) > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500'}">
+                $${parseFloat(run.recovered_amount || 0).toFixed(2)}
+              </td>
+              <td class="py-3 px-4">${wastedBadge}</td>
+              <td class="py-3 px-4 text-slate-500 text-[11px] font-mono">${date}</td>
+            </tr>
+          `;
+        }).join('');
+
+        updateChart(actionCounts);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function updateChart(actionCounts) {
+      const ctx = document.getElementById('actionsChart').getContext('2d');
+      const labels = Object.keys(actionCounts).length ? Object.keys(actionCounts) : ['No Data'];
+      const data = Object.values(actionCounts).length ? Object.values(actionCounts) : [1];
+
+      const colors = {
+        schedule_retry: '#f59e0b',
+        retry_now: '#10b981',
+        notify_customer: '#3b82f6',
+        mark_lost: '#64748b',
+        manual_review: '#a855f7',
+      };
+
+      const bgColors = labels.map(l => colors[l] || '#475569');
+
+      if (actionsChartInstance) {
+        actionsChartInstance.destroy();
+      }
+
+      actionsChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: bgColors,
+            borderColor: '#0f172a',
+            borderWidth: 2,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { boxWidth: 12, color: '#94a3b8', font: { size: 10 } }
+            }
+          },
+          cutout: '70%'
+        }
+      });
+    }
+
+    async function handleRunAgent(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-run');
+      const banner = document.getElementById('run-banner');
+      const bannerText = document.getElementById('run-banner-text');
+      const bannerTime = document.getElementById('run-banner-time');
+
+      const mode = document.getElementById('run-mode').value;
+      const limit = parseInt(document.getElementById('run-limit').value);
+      const resetRuns = document.getElementById('run-reset').checked;
+
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Processing...</span>`;
+      lucide.createIcons();
+
+      banner.classList.remove('hidden');
+      bannerText.textContent = `Running ${mode} recovery agent on ${limit} transactions...`;
+      const startTime = performance.now();
+
+      try {
+        const res = await fetch('/agent/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode, limit, reset_runs: resetRuns })
+        });
+        const data = await res.json();
+        const duration = ((performance.now() - startTime) / 1000).toFixed(2);
+
+        bannerText.textContent = `Successfully processed ${data.processed || limit} transactions. Recovered $${parseFloat(data.recovered_revenue || 0).toFixed(2)}.`;
+        bannerTime.textContent = `${duration}s`;
+        await refreshData();
+      } catch (err) {
+        bannerText.textContent = `Error: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="zap" class="w-4 h-4"></i><span>Run Engine</span>`;
+        lucide.createIcons();
+      }
+    }
+
+    async function refreshData() {
+      await Promise.all([fetchMetrics(), fetchRuns()]);
+      lucide.createIcons();
+    }
+
+    // Initial load
+    refreshData();
+    lucide.createIcons();
+  </script>
+</body>
+</html>
+
